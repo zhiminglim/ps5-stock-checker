@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}
+    spec:
+      containers:
+      - name: myapp
+        image: alpine
+        env:
+        - name: TZ
+          value: Asia/Singapore
+        - name: TELEGRAM_BOT_TOKEN
+          value: $TELEGRAM_SECRET
+        command:
+        - /bin/sh
+        - -c 
+        - |
+          apk add --no-cache bash curl tzdata
+          sleep 3
+
+          # Infinite loop
+          while :
+          do
+            echo "retrieving HTML DOM from sony store at -> https://store.sony.com.sg/collections/playstation-consoles/products/playstation-5-digital-bundle"
+            now="$(date)"
+            
+            STOCK_AVAILABILITY=$(curl -s https://store.sony.com.sg/collections/playstation-consoles/products/playstation-5-digital-bundle | grep -A2 "product__payment-container" | sed 's/<[^>]*>//g')
+            #echo -e "Status of PS5 as of $now is $STOCK_AVAILABILITY\n"
+
+            STATUS=$(echo -e "Status of PS5 as of $now is $STOCK_AVAILABILITY")
+            echo "$STATUS"
+
+            if [[ "$STOCK_AVAILABILITY" != "Out Of Stock" && "$STOCK_AVAILABILITY" != "" ]] ; then
+              echo -e "SENDING TO BOT NOW!!!\n"
+              curl -X POST \
+                -H 'Content-Type: application/json' \
+                -d '{"chat_id": "-$TARGET_TELEGRAM_CHAT_ID", "text": "'"$STATUS"'"}' \
+                https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage
+            else
+              echo -e "Not sending to bot yet...\n"
+            fi
+
+            sleep 5
+          done
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "300m"
